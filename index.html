@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quality Captures Dashboard — Gritsee</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #151821;
+    --panel-2: #1d2230;
+    --border: #262b3a;
+    --text: #e7eaf2;
+    --text-dim: #8a93a8;
+    --accent: #6c8cff;
+    --accent-2: #38d9a9;
+    --warn: #ff9558;
+    --danger: #ff5e7e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "SF Pro Display", Inter, system-ui, sans-serif;
+    font-feature-settings: "tnum" 1;
+    line-height: 1.5;
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 32px 28px 80px; }
+  header {
+    display: flex; flex-direction: column; gap: 6px;
+    padding-bottom: 24px; border-bottom: 1px solid var(--border); margin-bottom: 28px;
+  }
+  h1 {
+    font-size: 24px; margin: 0; font-weight: 600; letter-spacing: -0.02em;
+  }
+  .subtitle { color: var(--text-dim); font-size: 14px; }
+  .badge {
+    display: inline-block; background: var(--panel-2); color: var(--accent-2);
+    padding: 2px 10px; border-radius: 12px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+    border: 1px solid var(--border);
+  }
+  .filters {
+    display: grid; grid-template-columns: repeat(4, 1fr) auto;
+    gap: 12px; padding: 16px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px;
+  }
+  .filter label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 6px;
+  }
+  .filter select, .filter input {
+    width: 100%; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px;
+    font-size: 14px; font-family: inherit;
+  }
+  .btn-reset {
+    align-self: end; background: transparent; color: var(--text-dim);
+    border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px;
+    font-size: 13px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-reset:hover { color: var(--text); border-color: var(--accent); }
+  .kpis {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 14px; margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+  .kpi-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .kpi-sub { font-size: 12px; color: var(--text-dim); }
+
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .chart-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .chart-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; }
+  .chart-canvas-wrap { position: relative; height: 280px; }
+
+  .footer-note {
+    margin-top: 32px; padding: 16px; background: var(--panel);
+    border: 1px dashed var(--border); border-radius: 10px;
+    font-size: 12px; color: var(--text-dim);
+  }
+  .footer-note strong { color: var(--text); }
+  .footer-note code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 11px; color: var(--accent-2); }
+
+  @media (max-width: 900px) { .filters, .kpis, .charts { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .filters, .kpis, .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <span class="badge">Quality Captures · Gritsee</span>
+    <h1>Dashboard de Capturas de Calidad</h1>
+    <span class="subtitle"><strong id="totalImgs">—</strong> imágenes capturadas en <strong id="totalDays">—</strong> días desde el bucket S3 <code>gritsee-ensemble</code></span>
+  </header>
+
+  <div class="filters">
+    <div class="filter">
+      <label>Tienda</label>
+      <select id="filterPlant"><option value="all">Todas</option></select>
+    </div>
+    <div class="filter">
+      <label>Turno</label>
+      <select id="filterShift">
+        <option value="all">Todos</option>
+        <option value="0">AM</option>
+        <option value="1">PM</option>
+      </select>
+    </div>
+    <div class="filter">
+      <label>Desde</label>
+      <input type="date" id="filterDateFrom" />
+    </div>
+    <div class="filter">
+      <label>Hasta</label>
+      <input type="date" id="filterDateTo" />
+    </div>
+    <button class="btn-reset" id="btnReset">Reset</button>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <span class="kpi-label">Imágenes capturadas</span>
+      <span class="kpi-value" id="kpiImgs">—</span>
+      <span class="kpi-sub" id="kpiImgsSub">frames extraídos</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Días monitoreados</span>
+      <span class="kpi-value" id="kpiDays">—</span>
+      <span class="kpi-sub">jornadas con capturas</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Sesiones de captura</span>
+      <span class="kpi-value" id="kpiSessions">—</span>
+      <span class="kpi-sub">eventos únicos de grabación</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">% Turno PM</span>
+      <span class="kpi-value" id="kpiPM">—</span>
+      <span class="kpi-sub">concentración en tarde</span>
+    </div>
+  </div>
+
+  <div class="charts">
+
+    <div class="chart-card wide">
+      <h3 class="chart-title">① Imágenes capturadas por día</h3>
+      <p class="chart-sub">Volumen diario de frames extraídos del bucket</p>
+      <div class="chart-canvas-wrap"><canvas id="chartByDay"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-title">② Distribución AM vs PM por día</h3>
+      <p class="chart-sub">Capturas segmentadas por turno (matutino / vespertino)</p>
+      <div class="chart-canvas-wrap"><canvas id="chartShift"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-title">③ Distribución por hora del día</h3>
+      <p class="chart-sub">Ventana de actividad — horas con mayor volumen de capturas</p>
+      <div class="chart-canvas-wrap"><canvas id="chartHour"></canvas></div>
+    </div>
+
+    <div class="chart-card wide">
+      <h3 class="chart-title">④ Frames por sesión de captura</h3>
+      <p class="chart-sub">Distribución del número de frames extraídos por evento de grabación</p>
+      <div class="chart-canvas-wrap"><canvas id="chartSession"></canvas></div>
+    </div>
+
+  </div>
+
+  <div class="footer-note">
+    <strong>Conexiones:</strong> Este dashboard se alimenta de dos fuentes — (1) el archivo <strong>prueba.csv</strong> con la metadata de cada captura (fecha + URL) y (2) el bucket S3 <code>gritsee-ensemble</code> donde residen los frames físicos extraídos del proceso de control de calidad. En producción ambas se consolidan en <strong>Supabase</strong>: el CSV alimenta la tabla <code>audit_images</code>, y la base PgAdmin externa con auditorías se sincroniza vía <code>postgres_fdw</code>. Ver documento de entrega para detalles.
+  </div>
+
+</div>
+
+<script>
+const DATA = {"plants":["Ramos Arizpe"],"dates":["2026-04-20","2026-04-21","2026-04-23","2026-04-24","2026-04-25","2026-04-27","2026-04-28"],"records":[[0,0,1,21,26,1],[0,0,1,13,7,19],[0,0,1,20,22,24],[0,0,1,12,3,3],[0,0,1,20,23,28],[0,0,1,19,19,3],[0,0,1,14,8,15],[0,0,1,20,23,29],[0,0,1,14,10,8],[0,0,1,19,18,3],[0,0,1,13,6,8],[0,0,1,20,20,13],[0,0,1,12,1,27],[0,0,1,14,13,11],[0,0,1,12,3,7],[0,0,1,20,22,26],[0,0,1,12,3,2],[0,0,1,14,13,9],[0,0,1,21,25,12],[0,0,1,20,20,24],[0,0,1,18,17,11],[0,0,1,18,16,18],[0,0,1,21,27,28],[0,0,1,13,6,21],[0,0,1,14,10,15],[0,0,1,15,14,17],[0,0,1,19,19,15],[0,0,1,14,10,14],[0,0,1,21,27,29],[0,0,1,18,15,8],[0,0,1,14,8,12],[0,0,1,14,11,20],[0,0,1,14,12,4],[0,0,1,20,22,29],[0,0,1,14,9,6],[0,0,1,13,6,7],[0,0,1,21,27,24],[0,0,1,13,4,21],[0,0,1,14,8,14],[0,0,1,12,1,28],[0,0,1,20,22,25],[0,0,1,15,14,11],[0,0,1,18,16,22],[0,0,1,14,12,5],[0,0,1,21,24,7],[0,0,1,19,18,16],[0,0,0,11,0,11],[0,0,1,12,3,8],[0,0,1,14,12,3],[0,0,1,21,25,29],[0,0,1,18,15,1],[0,0,1,18,16,29],[0,0,1,13,5,24],[0,0,1,14,11,19],[0,0,1,14,13,14],[0,0,1,14,11,4],[0,0,1,19,18,5],[0,0,1,20,21,29],[0,0,1,12,2,3],[0,0,1,18,15,9],[0,1,1,19,45,6],[0,1,0,11,28,27],[0,1,1,20,51,1],[0,1,1,18,41,5],[0,1,1,13,33,23],[0,1,1,13,32,1],[0,1,1,18,42,23],[0,1,1,14,36,17],[0,1,1,19,47,29],[0,1,1,13,33,29],[0,1,1,20,49,25],[0,1,1,13,30,30],[0,1,1,19,45,5],[0,1,0,11,29,12],[0,1,1,15,37,11],[0,1,1,20,51,2],[0,1,1,19,47,28],[0,1,1,19,43,8],[0,1,1,21,52,26],[0,1,1,13,32,26],[0,1,1,18,41,22],[0,1,1,15,37,10],[0,1,1,19,43,12],[0,1,1,14,35,5],[0,1,1,18,42,16],[0,1,1,20,49,29],[0,1,1,19,45,9],[0,1,1,15,40,10],[0,1,1,15,38,8],[0,1,1,19,47,23],[0,1,1,19,44,16],[0,1,0,11,28,20],[0,1,1,15,39,25],[0,1,1,13,31,17],[0,1,1,13,31,15],[0,1,1,21,52,29],[0,1,1,15,38,15],[0,1,0,11,29,2],[0,1,1,19,43,15],[0,1,1,19,48,19],[0,1,1,19,46,30],[0,1,1,14,34,30],[0,1,1,20,50,26],[0,1,1,19,45,4],[0,1,1,13,33,24],[0,1,1,15,39,22],[0,1,1,18,42,17],[0,1,1,19,43,11],[0,1,1,18,42,15],[0,1,1,13,33,22],[0,1,1,18,41,21],[0,1,1,19,44,29],[0,1,1,20,49,11],[0,1,0,11,29,16],[0,1,1,15,39,29],[0,1,0,11,29,3],[0,1,1,13,31,11],[0,1,1,19,46,15],[0,1,1,15,38,16],[0,1,1,18,41,6],[0,2,1,12,55,8],[0,2,1,18,69,11],[0,2,1,13,59,5],[0,2,1,12,54,1],[0,2,1,19,74,7],[0,2,1,14,62,10],[0,2,1,18,70,16],[0,2,1,20,76,22],[0,2,1,20,77,3],[0,2,1,14,60,22],[0,2,1,21,79,12],[0,2,1,19,72,16],[0,2,1,13,57,10],[0,2,1,12,55,5],[0,2,1,20,75,11],[0,2,1,21,78,28],[0,2,1,19,71,4],[0,2,1,21,79,4],[0,2,1,13,58,4],[0,2,1,12,56,12],[0,2,1,18,69,16],[0,2,1,14,63,2],[0,2,1,19,71,13],[0,2,1,14,62,9],[0,2,1,18,70,17],[0,2,1,21,78,27],[0,2,1,20,75,12],[0,2,1,21,79,2],[0,2,1,18,68,13],[0,2,1,15,64,21],[0,2,1,18,70,24],[0,2,1,12,55,7],[0,2,1,20,76,23],[0,2,1,12,54,2],[0,2,1,18,68,12],[0,2,1,12,56,8],[0,2,0,11,53,28],[0,2,1,19,71,2],[0,2,1,19,71,5],[0,2,1,19,73,2],[0,2,1,19,72,17],[0,2,1,15,64,22],[0,2,1,21,78,21],[0,2,1,21,79,3],[0,2,1,14,60,10],[0,2,1,20,77,22],[0,2,1,20,75,13],[0,2,1,15,66,21],[0,2,1,12,56,13],[0,2,1,19,74,6],[0,2,1,20,77,8],[0,2,1,13,58,7],[0,2,1,18,69,15],[0,2,1,18,69,12],[0,2,1,14,61,28],[0,2,1,18,68,7],[0,2,1,12,55,1],[0,2,1,12,56,6],[0,2,1,15,67,7],[0,2,1,15,65,11],[0,3,1,13,85,25],[0,3,1,14,90,20],[0,3,1,13,87,21],[0,3,1,20,105,11],[0,3,1,12,82,19],[0,3,1,14,93,5],[0,3,1,19,100,30],[0,3,1,14,90,21],[0,3,1,15,94,4],[0,3,1,14,92,10],[0,3,0,11,81,24],[0,3,1,19,102,18],[0,3,1,13,85,2],[0,3,1,13,87,9],[0,3,1,21,106,20],[0,3,1,12,83,29],[0,3,1,13,87,3],[0,3,0,11,81,3],[0,3,1,13,85,3],[0,3,1,14,91,18],[0,3,1,12,82,20],[0,3,1,19,102,15],[0,3,1,12,82,17],[0,3,1,18,97,24],[0,3,1,14,90,23],[0,3,1,20,104,17],[0,3,1,15,96,15],[0,3,1,19,101,24],[0,3,1,20,105,4],[0,3,1,14,88,25],[0,3,1,15,96,14],[0,3,1,14,92,22],[0,3,1,19,102,17],[0,3,1,19,101,29],[0,3,1,21,106,8],[0,3,1,14,89,15],[0,3,1,19,103,5],[0,3,1,19,99,10],[0,3,1,14,92,2],[0,3,0,11,80,29],[0,3,1,12,83,7],[0,3,1,18,98,20],[0,3,1,14,89,2],[0,3,1,13,85,24],[0,3,0,11,81,23],[0,3,1,19,103,12],[0,3,1,13,87,13],[0,3,1,14,89,3],[0,3,1,12,83,22],[0,3,1,14,91,22],[0,3,1,12,82,22],[0,3,1,19,99,9],[0,3,1,13,84,17],[0,3,1,20,105,3],[0,3,1,14,91,26],[0,3,1,20,104,18],[0,3,1,15,95,24],[0,3,1,13,86,27],[0,3,1,12,83,26],[0,3,1,19,99,8],[0,4,1,21,152,4],[0,4,1,19,147,15],[0,4,1,13,112,29],[0,4,0,11,133,26],[0,4,1,14,142,3],[0,4,1,20,151,13],[0,4,1,12,111,11],[0,4,1,14,118,25],[0,4,1,20,127,4],[0,4,1,13,136,23],[0,4,1,20,126,5],[0,4,1,12,135,2],[0,4,1,20,129,26],[0,4,1,14,140,22],[0,4,1,14,116,23],[0,4,0,11,108,3],[0,4,1,13,115,4],[0,4,1,20,150,16],[0,4,0,11,132,8],[0,4,1,19,147,14],[0,4,1,18,146,20],[0,4,1,19,148,23],[0,4,1,19,123,5],[0,4,0,11,107,30],[0,4,1,15,144,4],[0,4,1,15,121,25],[0,4,1,13,114,28],[0,4,1,19,122,3],[0,4,1,19,125,17],[0,4,1,12,111,24],[0,4,1,13,139,20],[0,4,1,21,153,10],[0,4,1,13,113,10],[0,4,1,12,110,5],[0,4,1,15,145,3],[0,4,1,14,117,1],[0,4,1,14,141,17],[0,4,1,15,120,30],[0,4,1,20,128,28],[0,4,1,21,130,14],[0,4,1,19,149,14],[0,4,1,13,114,14],[0,4,1,13,137,7],[0,4,1,14,116,22],[0,4,1,14,141,12],[0,4,1,13,138,27],[0,4,0,11,107,11],[0,4,1,14,143,26],[0,4,1,14,140,30],[0,4,1,18,146,16],[0,4,1,21,131,4],[0,4,0,11,132,8],[0,4,1,20,150,15],[0,4,1,12,134,25],[0,4,1,14,143,26],[0,4,0,11,109,21],[0,4,1,19,124,25],[0,4,1,19,147,19],[0,4,1,19,149,11],[0,4,1,15,119,29],[0,5,1,13,161,21],[0,5,1,19,178,1],[0,5,1,15,169,25],[0,5,1,14,165,8],[0,5,1,13,159,22],[0,5,1,18,173,9],[0,5,1,19,181,27],[0,5,1,18,176,14],[0,5,1,15,170,2],[0,5,1,13,160,18],[0,5,1,21,186,17],[0,5,1,15,169,16],[0,5,1,12,158,20],[0,5,1,21,184,26],[0,5,1,14,164,28],[0,5,1,13,162,24],[0,5,1,15,170,1],[0,5,1,13,160,23],[0,5,1,20,183,14],[0,5,1,13,161,13],[0,5,1,19,178,17],[0,5,1,18,177,15],[0,5,1,14,167,27],[0,5,0,11,155,27],[0,5,1,15,171,26],[0,5,1,15,172,13],[0,5,1,14,164,4],[0,5,1,14,166,21],[0,5,1,12,156,15],[0,5,1,12,157,19],[0,5,1,20,182,16],[0,5,1,14,166,6],[0,5,0,11,154,6],[0,5,1,14,164,16],[0,5,1,13,159,9],[0,5,1,13,162,8],[0,5,1,19,178,18],[0,5,1,14,168,22],[0,5,1,15,171,28],[0,5,1,19,179,15],[0,5,1,18,174,25],[0,5,1,13,160,29],[0,5,1,18,177,28],[0,5,1,13,161,1],[0,5,1,15,169,20],[0,5,0,11,155,26],[0,5,1,14,168,21],[0,5,1,12,157,17],[0,5,1,13,163,21],[0,5,1,18,174,20],[0,5,1,21,185,4],[0,5,1,18,175,6],[0,5,1,12,158,28],[0,5,1,12,156,25],[0,5,1,21,184,20],[0,5,1,19,178,16],[0,5,1,19,180,11],[0,5,1,14,165,16],[0,5,1,15,171,29],[0,5,1,18,173,30],[0,6,1,13,193,11],[0,6,1,19,205,21],[0,6,1,13,189,20],[0,6,1,15,198,30],[0,6,0,11,188,7],[0,6,1,19,204,22],[0,6,1,13,191,23],[0,6,1,21,211,2],[0,6,1,14,195,5],[0,6,1,20,207,2],[0,6,1,13,193,25],[0,6,1,19,205,1],[0,6,1,20,210,20],[0,6,1,13,192,21],[0,6,1,15,198,28],[0,6,1,20,208,28],[0,6,1,19,205,2],[0,6,1,18,202,4],[0,6,1,20,210,30],[0,6,1,14,196,8],[0,6,1,15,199,16],[0,6,1,14,195,21],[0,6,1,19,203,12],[0,6,1,14,195,4],[0,6,1,18,200,12],[0,6,1,20,208,27],[0,6,1,19,204,25],[0,6,1,13,189,18],[0,6,1,15,197,1],[0,6,1,14,194,28],[0,6,1,19,206,21],[0,6,1,13,190,20],[0,6,0,11,188,8],[0,6,1,20,207,3],[0,6,1,13,190,19],[0,6,0,11,187,5],[0,6,1,15,198,26],[0,6,1,19,206,27],[0,6,1,14,196,9],[0,6,1,13,190,23],[0,6,1,20,209,14],[0,6,1,20,207,4],[0,6,1,15,197,13],[0,6,1,15,199,28],[0,6,1,19,203,13],[0,6,1,13,193,12],[0,6,1,13,190,15],[0,6,0,11,188,9],[0,6,1,15,197,12],[0,6,1,19,205,3],[0,6,1,20,208,26],[0,6,1,15,199,14],[0,6,1,15,199,15],[0,6,1,13,193,7],[0,6,1,18,200,30],[0,6,1,18,201,1],[0,6,1,14,196,30],[0,6,1,13,189,19],[0,6,1,19,203,4],[0,6,1,15,197,11]]};
+
+const fmt = n => Number.isFinite(n) ? n.toLocaleString('es') : '—';
+
+const elPlant = document.getElementById('filterPlant');
+const elShift = document.getElementById('filterShift');
+const elFrom = document.getElementById('filterDateFrom');
+const elTo = document.getElementById('filterDateTo');
+
+DATA.plants.forEach((p,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=p; elPlant.appendChild(o); });
+elFrom.min = DATA.dates[0]; elFrom.max = DATA.dates[DATA.dates.length-1]; elFrom.value = DATA.dates[0];
+elTo.min = DATA.dates[0]; elTo.max = DATA.dates[DATA.dates.length-1]; elTo.value = DATA.dates[DATA.dates.length-1];
+
+document.getElementById('totalImgs').textContent = fmt(DATA.records.length);
+document.getElementById('totalDays').textContent = DATA.dates.length;
+
+function applyFilters() {
+  const p = elPlant.value;
+  const s = elShift.value;
+  const fromIdx = DATA.dates.indexOf(elFrom.value);
+  const toIdx = DATA.dates.indexOf(elTo.value);
+  return DATA.records.filter(r => {
+    if (p !== 'all' && r[0] !== +p) return false;
+    if (s !== 'all' && r[2] !== +s) return false;
+    if (r[1] < fromIdx || r[1] > toIdx) return false;
+    return true;
+  });
+}
+
+Chart.defaults.color = '#8a93a8';
+Chart.defaults.borderColor = '#262b3a';
+Chart.defaults.font.family = "-apple-system, Inter, sans-serif";
+
+let charts = {};
+
+function buildCharts(filtered) {
+  const totalImgs = filtered.length;
+  const days = new Set(filtered.map(r => r[1])).size;
+  const sessions = new Set(filtered.map(r => r[4])).size;
+  const pmCount = filtered.filter(r => r[2] === 1).length;
+  const pmPct = totalImgs ? (pmCount/totalImgs*100) : 0;
+
+  document.getElementById('kpiImgs').textContent = fmt(totalImgs);
+  document.getElementById('kpiImgsSub').textContent = totalImgs ? `de ${fmt(DATA.records.length)} totales` : 'sin datos';
+  document.getElementById('kpiDays').textContent = fmt(days);
+  document.getElementById('kpiSessions').textContent = fmt(sessions);
+  document.getElementById('kpiPM').textContent = pmPct.toFixed(1) + '%';
+
+  const dayCounts = DATA.dates.map((_,i) => filtered.filter(r => r[1]===i).length);
+  const amByDay = DATA.dates.map((_,i) => filtered.filter(r => r[1]===i && r[2]===0).length);
+  const pmByDay = DATA.dates.map((_,i) => filtered.filter(r => r[1]===i && r[2]===1).length);
+  const hourCounts = Array(24).fill(0);
+  filtered.forEach(r => hourCounts[r[3]]++);
+  const sessFrames = {};
+  filtered.forEach(r => { sessFrames[r[4]] = (sessFrames[r[4]] || 0) + 1; });
+  const framesPerSession = Object.values(sessFrames);
+  const maxFrames = Math.max(...framesPerSession, 1);
+  const sessionDist = Array(maxFrames + 1).fill(0);
+  framesPerSession.forEach(n => sessionDist[n]++);
+
+  Object.values(charts).forEach(c => c && c.destroy());
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e7eaf2', usePointStyle: true, padding: 16 } } },
+    scales: {
+      x: { grid: { color: 'rgba(38,43,58,0.6)' }, ticks: { color: '#8a93a8' } },
+      y: { grid: { color: 'rgba(38,43,58,0.6)' }, ticks: { color: '#8a93a8' } }
+    }
+  };
+
+  charts.day = new Chart(document.getElementById('chartByDay'), {
+    type: 'bar',
+    data: { labels: DATA.dates, datasets: [{ label: 'Imágenes', data: dayCounts, backgroundColor: '#6c8cff', borderRadius: 6 }] },
+    options: { ...baseOpts, plugins: { legend: { display: false } } }
+  });
+
+  charts.shift = new Chart(document.getElementById('chartShift'), {
+    type: 'bar',
+    data: {
+      labels: DATA.dates,
+      datasets: [
+        { label: 'AM', data: amByDay, backgroundColor: '#38d9a9', borderRadius: 4 },
+        { label: 'PM', data: pmByDay, backgroundColor: '#ff9558', borderRadius: 4 }
+      ]
+    },
+    options: { ...baseOpts,
+      scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, stacked: true }, y: { ...baseOpts.scales.y, stacked: true } }
+    }
+  });
+
+  charts.hour = new Chart(document.getElementById('chartHour'), {
+    type: 'line',
+    data: {
+      labels: hourCounts.map((_,i)=>String(i).padStart(2,'0')+':00'),
+      datasets: [{ label: 'Capturas', data: hourCounts, borderColor: '#38d9a9', backgroundColor: 'rgba(56,217,169,0.15)', fill: true, tension: 0.3, pointRadius: 3 }]
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } } }
+  });
+
+  charts.session = new Chart(document.getElementById('chartSession'), {
+    type: 'bar',
+    data: {
+      labels: sessionDist.map((_,i)=>i+' frames').slice(1),
+      datasets: [{ label: 'Sesiones', data: sessionDist.slice(1), backgroundColor: '#ff9558', borderRadius: 6 }]
+    },
+    options: { ...baseOpts, plugins: { legend: { display: false } },
+      scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: '# de sesiones', color: '#8a93a8' } } }
+    }
+  });
+}
+
+function refresh() { buildCharts(applyFilters()); }
+
+[elPlant, elShift, elFrom, elTo].forEach(el => el.addEventListener('change', refresh));
+document.getElementById('btnReset').addEventListener('click', () => {
+  elPlant.value = 'all'; elShift.value = 'all';
+  elFrom.value = DATA.dates[0]; elTo.value = DATA.dates[DATA.dates.length-1];
+  refresh();
+});
+
+refresh();
+</script>
+</body>
+</html>
